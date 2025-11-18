@@ -311,6 +311,25 @@ void ColumnsDescription::add(ColumnDescription column, const String & after_colu
         throw Exception(ErrorCodes::ILLEGAL_COLUMN,
                         "Cannot add column {}: column with this name already exists", column.name);
 
+    if (column.name.contains('.'))
+    {
+        auto [base_column_name, subcolumn_name] = Nested::splitName(column.name);
+        if (!base_column_name.empty() && !subcolumn_name.empty())
+        {
+            auto it = columns.get<1>().find(base_column_name);
+            if (it != columns.get<1>().end())
+            {
+                String full_subcolumn_name = base_column_name + "." + subcolumn_name;
+                if (hasSubcolumn(full_subcolumn_name) || it->type->tryGetSubcolumnType(subcolumn_name))
+                {
+                    throw Exception(ErrorCodes::ILLEGAL_COLUMN,
+                        "Cannot add column {}: this name conflicts with a subcolumn of existing column {}", 
+                        column.name, base_column_name);
+                }
+            }
+        }
+    }
+
     /// Normalize ASTs to be compatible with InterpreterCreateQuery.
     if (column.default_desc.expression)
         FunctionNameNormalizer::visit(column.default_desc.expression.get());
@@ -928,7 +947,7 @@ void ColumnsDescription::addSubcolumns(const String & name_in_storage, const Dat
     {
         auto subcolumn = NameAndTypePair(name_in_storage, subname, type_in_storage, subdata.type);
 
-        if (hasSubcolumn(subcolumn.name))
+        if (has(subcolumn.name) || hasSubcolumn(subcolumn.name))
             throw Exception(ErrorCodes::ILLEGAL_COLUMN,
                 "Cannot add subcolumn {}: column with this name already exists", subcolumn.name);
 
