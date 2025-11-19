@@ -7304,15 +7304,15 @@ namespace Setting
 #undef INITIALIZE_SETTING_EXTERN
 
 Settings::Settings()
-    : impl(std::make_unique<SettingsImpl>())
+    : impl(std::make_shared<SettingsImpl>())
 {}
 
 Settings::Settings(const Settings & settings)
-    : impl(std::make_unique<SettingsImpl>(*settings.impl))
+    : impl(settings.impl)  // Share the impl until modified (copy-on-write)
 {}
 
 Settings::Settings(Settings && settings) noexcept
-    : impl(std::make_unique<SettingsImpl>(std::move(*settings.impl)))
+    : impl(std::move(settings.impl))
 {}
 
 Settings::~Settings() = default;
@@ -7321,8 +7321,14 @@ Settings & Settings::operator=(const Settings & other)
 {
     if (&other == this)
         return *this;
-    *impl = *other.impl;
+    impl = other.impl;  // Share the impl until modified (copy-on-write)
     return *this;
+}
+
+void Settings::ensureUnique()
+{
+    if (!impl || !impl.unique())
+        impl = std::make_shared<SettingsImpl>(impl ? *impl : SettingsImpl{});
 }
 
 bool Settings::operator==(const Settings & other) const
@@ -7359,11 +7365,13 @@ Field Settings::get(std::string_view name) const
 
 void Settings::set(std::string_view name, const Field & value)
 {
+    ensureUnique();
     impl->set(name, value);
 }
 
 void Settings::setDefaultValue(std::string_view name)
 {
+    ensureUnique();
     impl->resetToDefault(name);
 }
 
@@ -7384,6 +7392,7 @@ SettingsChanges Settings::changes() const
 
 void Settings::applyChanges(const SettingsChanges & changes)
 {
+    ensureUnique();
     impl->applyChanges(changes);
 }
 
@@ -7508,6 +7517,7 @@ void Settings::write(WriteBuffer & out, SettingsWriteFormat format) const
 
 void Settings::read(ReadBuffer & in, SettingsWriteFormat format)
 {
+    ensureUnique();
     impl->read(in, format);
 }
 

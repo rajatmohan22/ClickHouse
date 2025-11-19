@@ -164,6 +164,7 @@ struct Settings
     static void checkNoSettingNamesAtTopLevel(const Poco::Util::AbstractConfiguration & config, const String & config_path);
 
 private:
-    std::unique_ptr<SettingsImpl> impl;
+    std::shared_ptr<SettingsImpl> impl;
+    void ensureUnique();
 };
 }
